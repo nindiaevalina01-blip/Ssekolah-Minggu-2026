@@ -12,8 +12,18 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Konfigurasi Firebase
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // Konfigurasi Firebase - Pastikan variabel ini tersedia di lingkungan Anda
+        // Jika menjalankan di luar Canvas, Anda harus mengganti variabel __firebase_config 
+        // dengan objek konfigurasi Firebase asli Anda dari Firebase Console.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -25,7 +35,7 @@
         let currentView = 'login';
         let selectedClass = 'Bintang';
 
-        // 1. Inisialisasi Autentikasi (RULE 3: Auth Before Queries)
+        // 1. Inisialisasi Autentikasi
         const initAuth = async () => {
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -35,7 +45,7 @@
                 }
             } catch (error) {
                 console.error("Auth error:", error);
-                showToast("Gagal menyambungkan ke server", "error");
+                showToast("Gagal menyambungkan ke server cloud", "error");
             }
         };
 
@@ -43,22 +53,20 @@
         onAuthStateChanged(auth, (authenticatedUser) => {
             user = authenticatedUser;
             if (user) {
-                loadData(); // Jalankan query hanya setelah user terautentikasi
+                loadData();
             }
         });
 
-        // 2. Ambil Data (RULE 1 & 2)
+        // 2. Ambil Data
         function loadData() {
             if (!user) return;
-            
-            // Menggunakan path yang sesuai aturan: /artifacts/{appId}/public/data/{collectionName}
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'students');
             
             onSnapshot(q, (snapshot) => {
                 students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 render();
             }, (error) => {
-                console.error("Error fetch data:", error);
+                console.error("Firestore error:", error);
             });
         }
 
@@ -69,7 +77,7 @@
             render();
         };
 
-        // Fungsi Login
+        // Fungsi Login (Admin sederhana)
         window.handleLogin = (e) => {
             e.preventDefault();
             const username = e.target.username.value;
@@ -114,7 +122,7 @@
                 navigate('dashboard');
             } catch (err) {
                 console.error("Save error:", err);
-                showToast("Gagal menyimpan data ke database", "error");
+                showToast("Gagal menyimpan ke cloud", "error");
             }
         };
 
@@ -127,7 +135,7 @@
                 video.classList.remove('hidden');
                 document.getElementById('snapBtn').classList.remove('hidden');
             } catch (err) {
-                showToast("Gagal mengakses kamera", "error");
+                showToast("Izin kamera ditolak atau tidak tersedia", "error");
             }
         };
 
@@ -147,7 +155,7 @@
             document.getElementById('snapBtn').classList.add('hidden');
         };
 
-        // Scan Wajah Logic (Simulasi)
+        // Scan Wajah (Simulasi)
         window.startScan = (studentId) => {
             const student = students.find(s => s.id === studentId);
             const scanOverlay = document.getElementById('scanOverlay');
@@ -162,7 +170,7 @@
         function showToast(msg, type) {
             const toast = document.getElementById('toast');
             toast.innerText = msg;
-            toast.className = `fixed bottom-4 right-4 p-4 rounded text-white transition-all opacity-100 z-50 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+            toast.className = `fixed bottom-4 right-4 p-4 rounded-xl text-white transition-all opacity-100 z-50 shadow-lg ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
             setTimeout(() => toast.classList.add('opacity-0'), 3000);
         }
 
@@ -178,9 +186,9 @@
                             <i data-lucide="check-circle" class="text-green-600 w-12 h-12"></i>
                         </div>
                         <h2 class="text-2xl font-bold text-green-700">BERHASIL!</h2>
-                        <img src="${student.foto}" class="w-32 h-32 rounded-full mx-auto my-4 border-4 border-green-500 object-cover">
+                        <img src="${student.foto}" class="w-32 h-32 rounded-full mx-auto my-4 border-4 border-green-500 object-cover shadow-md">
                         <p class="text-lg font-semibold">${student.nama}</p>
-                        <p class="text-gray-500">Absensi Tercatat</p>
+                        <p class="text-gray-500 italic">"Selamat melayani di Sekolah Minggu!"</p>
                     </div>
                 `;
             } else {
@@ -189,8 +197,8 @@
                         <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <i data-lucide="x-circle" class="text-red-600 w-12 h-12"></i>
                         </div>
-                        <h2 class="text-2xl font-bold text-red-700">GAGAL DETEKSI</h2>
-                        <p class="text-gray-500 mt-2">Wajah tidak sesuai dengan profil.</p>
+                        <h2 class="text-2xl font-bold text-red-700">GAGAL VERIFIKASI</h2>
+                        <p class="text-gray-500 mt-2">Wajah tidak terdeteksi atau tidak cocok.</p>
                     </div>
                 `;
             }
@@ -205,71 +213,73 @@
             if (currentView === 'login') {
                 appDiv.innerHTML = `
                     <div class="min-h-screen flex items-center justify-center bg-blue-50 p-4">
-                        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+                        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border border-white/20">
                             <div class="text-center mb-8">
-                                <div class="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-white shadow-lg">
-                                    <i data-lucide="church" class="w-8 h-8"></i>
+                                <div class="bg-blue-600 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-blue-200 shadow-xl rotate-3 hover:rotate-0 transition-transform">
+                                    <i data-lucide="church" class="w-10 h-10"></i>
                                 </div>
-                                <h1 class="text-2xl font-bold text-gray-800">Portal Sekolah Minggu</h1>
-                                <p class="text-gray-500">Silahkan login ke sistem</p>
+                                <h1 class="text-2xl font-black text-gray-800 tracking-tight">PORTAL ABSENSI</h1>
+                                <p class="text-gray-400 text-sm font-medium uppercase tracking-widest">Sekolah Minggu Online</p>
                             </div>
                             <form onsubmit="handleLogin(event)" class="space-y-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">Username</label>
-                                    <input name="username" type="text" placeholder="admin" required class="w-full p-3 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Username</label>
+                                    <input name="username" type="text" placeholder="admin" required class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">Password</label>
-                                    <input name="password" type="password" placeholder="••••••••" required class="w-full p-3 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Password</label>
+                                    <input name="password" type="password" placeholder="••••••••" required class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all">
                                 </div>
-                                <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition">MASUK</button>
+                                <button type="submit" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-black text-lg shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all">MASUK SISTEM</button>
                             </form>
-                            <div class="mt-6 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                                <p class="text-[10px] text-gray-400 text-center uppercase tracking-widest font-semibold">Status Koneksi Database</p>
-                                <p class="text-xs text-blue-500 text-center font-mono mt-1">${user ? 'Terhubung (Online)' : 'Menghubungkan...'}</p>
+                            <div class="mt-8 pt-6 border-t border-gray-100">
+                                <p class="text-[10px] text-gray-300 text-center uppercase font-bold tracking-tighter">Connected to Cloud Database System</p>
                             </div>
                         </div>
                     </div>
                 `;
             } else if (currentView === 'dashboard') {
                 appDiv.innerHTML = `
-                    <div class="min-h-screen bg-gray-50">
-                        <nav class="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-10">
-                            <div class="flex items-center gap-2">
-                                <i data-lucide="church" class="text-blue-600"></i>
-                                <span class="font-bold text-lg hidden sm:block text-gray-800">Portal Sekolah Minggu</span>
+                    <div class="min-h-screen bg-gray-50 pb-20">
+                        <nav class="bg-white/80 backdrop-blur-md shadow-sm p-4 flex justify-between items-center sticky top-0 z-10 border-b border-gray-100">
+                            <div class="flex items-center gap-3">
+                                <div class="bg-blue-600 p-2 rounded-lg text-white">
+                                    <i data-lucide="church" class="w-5 h-5"></i>
+                                </div>
+                                <span class="font-black text-gray-800 tracking-tighter">SM PORTAL</span>
                             </div>
                             <div class="flex gap-2">
-                                <button onclick="navigate('register')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 font-semibold">
+                                <button onclick="navigate('register')" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 font-bold shadow-md shadow-blue-100">
                                     <i data-lucide="user-plus" class="w-4 h-4"></i> Registrasi
                                 </button>
-                                <button onclick="navigate('login')" class="text-gray-400 hover:text-red-500 p-2 transition"><i data-lucide="log-out"></i></button>
+                                <button onclick="navigate('login')" class="bg-gray-100 text-gray-500 hover:text-red-600 p-2.5 rounded-xl transition-colors"><i data-lucide="log-out" class="w-5 h-5"></i></button>
                             </div>
                         </nav>
 
-                        <div class="p-4 max-w-6xl mx-auto">
-                            <div class="mb-8">
-                                <h2 class="text-2xl font-bold text-gray-800">Selamat Datang, Admin</h2>
-                                <p class="text-gray-500">Kelola absensi dan data murid hari ini.</p>
+                        <div class="p-6 max-w-6xl mx-auto">
+                            <div class="mb-10">
+                                <h2 class="text-3xl font-black text-gray-800">Halo, Admin 👋</h2>
+                                <p class="text-gray-500 font-medium">Silahkan pilih kelas untuk mulai melakukan absensi.</p>
                             </div>
 
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                                ${['Bintang', 'Cahaya', 'Pra Remaja'].map(cls => `
-                                    <div onclick="navigate('class_list', '${cls}')" class="group bg-white p-6 rounded-2xl shadow-sm border-l-8 ${cls === 'Bintang' ? 'border-yellow-400' : cls === 'Cahaya' ? 'border-blue-400' : 'border-purple-400'} cursor-pointer hover:shadow-md transition-all transform hover:-translate-y-1">
-                                        <div class="flex justify-between items-start">
-                                            <div>
-                                                <h3 class="text-xl font-bold text-gray-800">${cls}</h3>
-                                                <p class="text-gray-500 mt-1">${students.filter(s => s.kelas === cls).length} Murid Terdaftar</p>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                ${['Bintang', 'Cahaya', 'Pra Remaja'].map(cls => {
+                                    const count = students.filter(s => s.kelas === cls).length;
+                                    return `
+                                    <div onclick="navigate('class_list', '${cls}')" class="group bg-white p-8 rounded-3xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-xl hover:border-blue-200 transition-all transform hover:-translate-y-2">
+                                        <div class="flex justify-between items-center mb-6">
+                                            <div class="p-4 rounded-2xl ${cls === 'Bintang' ? 'bg-yellow-50 text-yellow-600' : cls === 'Cahaya' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}">
+                                                <i data-lucide="${cls === 'Bintang' ? 'star' : cls === 'Cahaya' ? 'sun' : 'users'}" class="w-8 h-8"></i>
                                             </div>
-                                            <div class="p-3 rounded-xl bg-gray-50 group-hover:bg-gray-100 transition">
-                                                <i data-lucide="${cls === 'Bintang' ? 'star' : cls === 'Cahaya' ? 'sun' : 'users'}" class="${cls === 'Bintang' ? 'text-yellow-500' : cls === 'Cahaya' ? 'text-blue-500' : 'text-purple-500'} w-6 h-6"></i>
-                                            </div>
+                                            <span class="text-4xl font-black text-gray-100 group-hover:text-gray-200 transition-colors uppercase">${cls[0]}</span>
                                         </div>
-                                        <div class="mt-6 flex items-center text-sm font-bold text-blue-600">
-                                            Buka Kelas <i data-lucide="chevron-right" class="w-4 h-4 ml-1"></i>
+                                        <h3 class="text-2xl font-black text-gray-800">${cls}</h3>
+                                        <p class="text-gray-400 font-bold text-sm mt-1">${count} MURID TERDAFTAR</p>
+                                        <div class="mt-8 flex items-center text-sm font-black text-blue-600 group-hover:translate-x-2 transition-transform">
+                                            LIHAT DAFTAR <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
                                         </div>
                                     </div>
-                                `).join('')}
+                                `}).join('')}
                             </div>
                         </div>
                     </div>
@@ -277,36 +287,37 @@
             } else if (currentView === 'class_list') {
                 const classStudents = students.filter(s => s.kelas === selectedClass);
                 appDiv.innerHTML = `
-                    <div class="min-h-screen bg-gray-50">
-                        <div class="bg-white p-4 flex items-center gap-4 shadow-sm">
-                            <button onclick="navigate('dashboard')" class="p-2 hover:bg-gray-100 rounded-full transition"><i data-lucide="arrow-left"></i></button>
-                            <h2 class="text-xl font-bold text-gray-800">Kelas ${selectedClass}</h2>
+                    <div class="min-h-screen bg-gray-50 pb-10">
+                        <div class="bg-white p-6 flex items-center gap-4 shadow-sm border-b border-gray-100">
+                            <button onclick="navigate('dashboard')" class="p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition"><i data-lucide="arrow-left" class="w-5 h-5 text-gray-600"></i></button>
+                            <div>
+                                <h2 class="text-2xl font-black text-gray-800">Kelas ${selectedClass}</h2>
+                                <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">${classStudents.length} Murid Tersedia</p>
+                            </div>
                         </div>
-                        <div class="p-4 max-w-4xl mx-auto">
-                            <div class="space-y-3">
+                        <div class="p-6 max-w-4xl mx-auto">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 ${classStudents.length === 0 ? `
-                                    <div class="bg-white p-12 rounded-2xl text-center border-2 border-dashed border-gray-200">
-                                        <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <i data-lucide="user-x" class="text-gray-300 w-8 h-8"></i>
+                                    <div class="col-span-full bg-white p-16 rounded-3xl text-center border-4 border-dashed border-gray-100">
+                                        <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <i data-lucide="user-x" class="text-gray-200 w-10 h-10"></i>
                                         </div>
-                                        <p class="text-gray-500">Belum ada murid di kelas ini.</p>
-                                        <button onclick="navigate('register')" class="mt-4 text-blue-600 font-bold hover:underline">Daftarkan Murid Baru</button>
+                                        <h3 class="text-xl font-bold text-gray-800">Belum Ada Data</h3>
+                                        <p class="text-gray-400 mt-2">Silahkan daftarkan murid baru untuk kelas ini.</p>
+                                        <button onclick="navigate('register')" class="mt-6 bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold">Daftar Sekarang</button>
                                     </div>
                                 ` : ''}
                                 ${classStudents.map(s => `
-                                    <div class="bg-white p-4 rounded-xl shadow-sm flex items-center justify-between border border-transparent hover:border-blue-200 transition">
+                                    <div class="bg-white p-5 rounded-2xl shadow-sm flex items-center justify-between border border-gray-50 hover:shadow-md transition-shadow">
                                         <div class="flex items-center gap-4">
-                                            <div class="relative">
-                                                <img src="${s.foto}" class="w-14 h-14 rounded-full object-cover bg-gray-200 border-2 border-white shadow-sm">
-                                                <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
-                                            </div>
+                                            <img src="${s.foto}" class="w-14 h-14 rounded-2xl object-cover bg-gray-100 border-2 border-white shadow-sm">
                                             <div>
-                                                <p class="font-bold text-gray-800">${s.nama}</p>
-                                                <p class="text-xs text-gray-500">${s.pendidikan} • ${s.usia} Tahun</p>
+                                                <p class="font-black text-gray-800 leading-tight">${s.nama}</p>
+                                                <p class="text-[10px] font-bold text-gray-400 uppercase mt-1">${s.pendidikan} • ${s.usia} THN</p>
                                             </div>
                                         </div>
-                                        <button onclick="startScan('${s.id}')" class="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all">
-                                            <i data-lucide="scan" class="w-4 h-4"></i> Absen
+                                        <button onclick="startScan('${s.id}')" class="bg-blue-600 text-white p-3 rounded-xl shadow-lg shadow-blue-100 hover:scale-105 transition-transform">
+                                            <i data-lucide="scan" class="w-5 h-5"></i>
                                         </button>
                                     </div>
                                 `).join('')}
@@ -316,62 +327,64 @@
                 `;
             } else if (currentView === 'register') {
                 appDiv.innerHTML = `
-                    <div class="min-h-screen bg-gray-50 p-4">
-                        <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm overflow-hidden">
-                            <div class="bg-blue-600 p-6 text-white flex justify-between items-center">
-                                <h2 class="text-xl font-bold">Registrasi Murid Baru</h2>
-                                <button onclick="navigate('dashboard')" class="p-2 hover:bg-blue-500 rounded-lg transition"><i data-lucide="x"></i></button>
+                    <div class="min-h-screen bg-gray-50 p-6 flex justify-center items-start">
+                        <div class="max-w-xl w-full bg-white rounded-3xl shadow-xl overflow-hidden">
+                            <div class="bg-blue-600 p-8 text-white">
+                                <h2 class="text-3xl font-black tracking-tight">REGISTRASI</h2>
+                                <p class="text-blue-100 font-medium">Input data murid baru ke database cloud.</p>
                             </div>
-                            <form onsubmit="handleRegister(event)" class="p-6 space-y-6">
-                                <div class="flex flex-col items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                    <div class="relative">
-                                        <img id="photoPreview" src="https://via.placeholder.com/150?text=FOTO" class="w-32 h-32 rounded-full object-cover border-4 border-white shadow-md">
-                                        <button type="button" onclick="startCamera()" class="absolute bottom-0 right-0 bg-blue-600 text-white p-2.5 rounded-full shadow-lg border-2 border-white transform hover:scale-110 transition"><i data-lucide="camera" class="w-4 h-4"></i></button>
+                            <form onsubmit="handleRegister(event)" class="p-8 space-y-8">
+                                <div class="flex flex-col items-center gap-6 p-8 bg-blue-50/50 rounded-3xl border-2 border-dashed border-blue-100">
+                                    <div class="relative group">
+                                        <img id="photoPreview" src="https://via.placeholder.com/150?text=PAS+FOTO" class="w-36 h-36 rounded-3xl object-cover border-4 border-white shadow-xl">
+                                        <button type="button" onclick="startCamera()" class="absolute -bottom-3 -right-3 bg-blue-600 text-white p-3.5 rounded-2xl shadow-xl hover:scale-110 active:scale-95 transition-all">
+                                            <i data-lucide="camera" class="w-5 h-5"></i>
+                                        </button>
                                     </div>
-                                    <div class="text-center">
-                                        <p class="text-sm font-bold text-gray-700">Foto Profil Utama</p>
-                                        <p class="text-[10px] text-gray-400">Digunakan untuk verifikasi wajah saat absen</p>
-                                    </div>
-                                    <video id="videoElement" autoplay playsinline class="hidden w-full max-w-xs rounded-xl bg-black aspect-video shadow-2xl"></video>
-                                    <button type="button" id="snapBtn" onclick="takePhoto()" class="hidden bg-red-600 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg hover:bg-red-700 transition">AMBIL FOTO</button>
+                                    <video id="videoElement" autoplay playsinline class="hidden w-full rounded-2xl bg-black aspect-video"></video>
+                                    <button type="button" id="snapBtn" onclick="takePhoto()" class="hidden bg-red-600 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-xl shadow-red-100 uppercase tracking-widest">Ambil Gambar</button>
                                 </div>
 
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <div class="md:col-span-2">
-                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Nama Lengkap Murid</label>
-                                        <input name="nama" type="text" required class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-                                    </div>
+                                <div class="grid grid-cols-1 gap-6">
                                     <div>
-                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Tanggal Lahir</label>
-                                        <input name="tglLahir" type="date" required class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
+                                        <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Nama Lengkap Murid</label>
+                                        <input name="nama" type="text" required placeholder="Contoh: Budi Santoso" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all">
                                     </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Usia (Tahun)</label>
-                                        <input name="usia" type="number" required class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Tgl Lahir</label>
+                                            <input name="tglLahir" type="date" required class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Usia</label>
+                                            <input name="usia" type="number" required placeholder="0" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all">
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Kategori Kelas</label>
-                                        <select name="kelas" class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-                                            <option value="Bintang">Bintang</option>
-                                            <option value="Cahaya">Cahaya</option>
-                                            <option value="Pra Remaja">Pra Remaja</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Tingkat Pendidikan</label>
-                                        <select name="pendidikan" class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-                                            <option>Belum Sekolah</option>
-                                            <optgroup label="Sekolah Dasar">
-                                                <option>SD Kelas 1</option><option>SD Kelas 2</option><option>SD Kelas 3</option>
-                                                <option>SD Kelas 4</option><option>SD Kelas 5</option><option>SD Kelas 6</option>
-                                            </optgroup>
-                                            <optgroup label="Sekolah Menengah">
-                                                <option>SMP Kelas 1</option><option>SMP Kelas 2</option><option>SMP Kelas 3</option>
-                                            </optgroup>
-                                        </select>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Kelas</label>
+                                            <select name="kelas" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all appearance-none">
+                                                <option value="Bintang">Bintang</option>
+                                                <option value="Cahaya">Cahaya</option>
+                                                <option value="Pra Remaja">Pra Remaja</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Pendidikan</label>
+                                            <select name="pendidikan" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all appearance-none">
+                                                <option>Belum Sekolah</option>
+                                                <option>TK</option>
+                                                <option>SD Kelas 1-3</option>
+                                                <option>SD Kelas 4-6</option>
+                                                <option>SMP</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
-                                <button type="submit" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold text-lg shadow-xl hover:bg-blue-700 transform hover:scale-[1.02] active:scale-95 transition-all">SIMPAN DATA KE CLOUD</button>
+                                <div class="flex gap-4">
+                                    <button type="button" onclick="navigate('dashboard')" class="flex-1 bg-gray-100 text-gray-500 p-4 rounded-2xl font-bold">BATAL</button>
+                                    <button type="submit" class="flex-[2] bg-blue-600 text-white p-4 rounded-2xl font-black text-lg shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all">SIMPAN DATA</button>
+                                </div>
                             </form>
                         </div>
                     </div>
@@ -380,51 +393,50 @@
             lucide.createIcons();
         }
 
-        // Jalankan Inisialisasi pada saat window load
         window.onload = async () => {
             await initAuth();
             render();
         };
     </script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
         .scan-line {
             position: absolute;
             width: 100%;
-            height: 2px;
+            height: 4px;
             background: #22c55e;
-            box-shadow: 0 0 10px #22c55e;
-            animation: moveScan 2s linear infinite;
+            box-shadow: 0 0 20px #22c55e;
+            animation: moveScan 2.5s ease-in-out infinite;
         }
         @keyframes moveScan {
-            0% { top: 0; }
-            100% { top: 100%; }
+            0%, 100% { top: 0; opacity: 0.5; }
+            50% { top: 100%; opacity: 1; }
         }
-        select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
     </style>
 </head>
-<body class="bg-gray-100 font-sans antialiased text-gray-900 selection:bg-blue-100">
+<body class="bg-gray-100 selection:bg-blue-100">
     <div id="app"></div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-4 right-4 p-4 rounded-xl text-white opacity-0 pointer-events-none transition-all duration-300 z-50 shadow-2xl"></div>
+    <div id="toast" class="fixed bottom-4 right-4 p-4 rounded-xl text-white opacity-0 pointer-events-none transition-all duration-300 z-[100]"></div>
 
-    <!-- Modal Status Absen -->
-    <div id="statusModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-3xl p-8 max-w-sm w-full relative shadow-2xl transform transition-all">
+    <div id="statusModal" class="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-6 z-[100] hidden">
+        <div class="bg-white rounded-[40px] p-10 max-w-sm w-full relative shadow-2xl transform transition-all border border-gray-100">
             <div id="statusContent"></div>
-            <button onclick="closeModal()" class="w-full mt-6 bg-gray-100 hover:bg-gray-200 py-3.5 rounded-2xl font-bold text-gray-700 transition">Tutup Jendela</button>
+            <button onclick="closeModal()" class="w-full mt-10 bg-gray-900 text-white py-4 rounded-2xl font-black tracking-widest uppercase text-sm hover:bg-gray-800 transition-colors">Selesai</button>
         </div>
     </div>
 
-    <!-- Overlay Scanning -->
-    <div id="scanOverlay" class="fixed inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center z-50 hidden text-white">
-        <div class="relative w-72 h-72 border-2 border-white/20 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(34,197,94,0.3)]">
+    <div id="scanOverlay" class="fixed inset-0 bg-blue-900/90 backdrop-blur-xl flex flex-col items-center justify-center z-[100] hidden text-white">
+        <div class="relative w-80 h-80 border-4 border-white/10 rounded-[50px] overflow-hidden shadow-2xl">
             <div class="scan-line"></div>
-            <div class="absolute inset-0 border-[16px] border-black/40"></div>
-            <video autoplay playsinline class="w-full h-full object-cover grayscale"></video>
+            <video autoplay playsinline class="w-full h-full object-cover opacity-50"></video>
+            <div class="absolute inset-0 flex items-center justify-center">
+                <div class="w-64 h-64 border border-white/20 rounded-full border-dashed animate-spin-slow"></div>
+            </div>
         </div>
-        <p class="mt-10 text-2xl font-black tracking-widest animate-pulse text-green-500 uppercase">Verifikasi Wajah...</p>
-        <p class="text-gray-400 mt-2 text-sm">Harap hadapkan wajah ke kamera dengan tenang</p>
+        <h3 class="mt-12 text-3xl font-black tracking-tighter animate-pulse text-blue-400">MEMINDAI WAJAH...</h3>
+        <p class="text-blue-200/60 font-medium mt-2">Mohon tetap diam dalam bingkai</p>
     </div>
 </body>
 </html>
